@@ -13,7 +13,10 @@ export const fastCheckRecursiveInterpreter = memo(
     recursive: f => {
       type FA = ReturnType<typeof f>
       const get = memo(() => f(res))
-      const res: FA = env => new FastCheckType(constant(null).chain(_ => get()(env).arb))
+      const res: FA = env => {
+        const getArb = memo(() => get()(env))
+        return new FastCheckType(constant(null).chain(_ => getArb().arb))
+      }
       return res
     }
   })

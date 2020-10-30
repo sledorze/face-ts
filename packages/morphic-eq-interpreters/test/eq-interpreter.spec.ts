@@ -306,4 +306,65 @@ describe('Eq', () => {
     chai.assert.deepStrictEqual(eq.equals(a1, b), false)
     chai.assert.deepStrictEqual(eq.equals(a1, n), false)
   })
+
+  it('handles generic recursive types', () => {
+    type Tree = Node | Leaf
+    interface Node {
+      type: 'node'
+      a: Tree
+      b: Tree
+    }
+    interface Leaf {
+      type: 'leaf'
+      v: string
+    }
+
+    type GTree<A> = GNode<A> | GLeaf<A>
+    interface GNode<A> {
+      type: 'node'
+      a: GTree<A>
+      b: GTree<A>
+    }
+    interface GLeaf<A> {
+      type: 'leaf'
+      v: A
+    }
+
+    let nbEvals = 0
+    let nbRecEvals = 0
+
+    const getTree = <A>(LeafValue: M<{}, unknown, A>): M<{}, unknown, GTree<A>> => {
+      const GTree: M<{}, unknown, GTree<A>> = summon(F => {
+        nbEvals += 1
+        return F.recursive(GTree => {
+          nbRecEvals += 1
+          return F.taggedUnion(
+            'type',
+            {
+              node: F.interface({ type: F.stringLiteral('node'), a: GTree, b: GTree }, 'Node'),
+              leaf: F.interface({ type: F.stringLiteral('leaf'), v: LeafValue(F) }, 'Leaf')
+            },
+            'Tree'
+          )
+        }, 'TreeRec')
+      })
+      return GTree
+    }
+
+    const numberValue = summon(F => F.number())
+
+    const { eq } = getTree(numberValue)
+    chai.assert.isTrue(eq.equals({ type: 'leaf', v: 0 }, { type: 'leaf', v: 0 }))
+    const firstRunNbEvals = nbEvals
+    const firstRunNbRecEvals = nbRecEvals
+
+    chai.assert.isTrue(
+      eq.equals(
+        { type: 'node', a: { type: 'leaf', v: 1 }, b: { type: 'leaf', v: 2 } },
+        { type: 'node', a: { type: 'leaf', v: 1 }, b: { type: 'leaf', v: 2 } }
+      )
+    )
+    chai.assert.deepStrictEqual(firstRunNbEvals, nbEvals)
+    chai.assert.deepStrictEqual(firstRunNbRecEvals, nbRecEvals)
+  })
 })
